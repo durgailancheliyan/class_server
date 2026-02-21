@@ -2,30 +2,14 @@ const CLASS_START_HOUR = 9;
 const CLASS_END_HOUR = 18;
 const SESSION_DURATION_MS = 2 * 60 * 1000;
 
-// Use India time so 9–6 check works for Velachery/Chennai (set ATTENDANCE_TIMEZONE if needed)
-const TIMEZONE = process.env.ATTENDANCE_TIMEZONE || 'Asia/Kolkata';
+// India (Velachery/Chennai): UTC+5:30 = 330 minutes. Set ATTENDANCE_UTC_OFFSET_MINUTES if different.
+const UTC_OFFSET_MINUTES = Number(process.env.ATTENDANCE_UTC_OFFSET_MINUTES) || 330;
+const UTC_OFFSET_MS = UTC_OFFSET_MINUTES * 60 * 1000;
 
+/** Get hour and minute in the configured timezone (default IST). */
 function getHourMinuteInTimezone(date) {
-  try {
-    const formatter = new Intl.DateTimeFormat('en-IN', {
-      timeZone: TIMEZONE,
-      hour: 'numeric',
-      minute: 'numeric',
-      hour12: false
-    });
-    const parts = formatter.formatToParts(date);
-    const hourPart = parts.find((p) => p.type === 'hour');
-    const minutePart = parts.find((p) => p.type === 'minute');
-    if (hourPart && minutePart) {
-      return {
-        hour: parseInt(hourPart.value, 10),
-        minute: parseInt(minutePart.value, 10)
-      };
-    }
-  } catch (e) {
-    console.warn('timeWindow: using server local time', e.message);
-  }
-  return { hour: date.getHours(), minute: date.getMinutes() };
+  const d = new Date(date.getTime() + UTC_OFFSET_MS);
+  return { hour: d.getUTCHours(), minute: d.getUTCMinutes() };
 }
 
 export function isWithinClassHours(date = new Date()) {
