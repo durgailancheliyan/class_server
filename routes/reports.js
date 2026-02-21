@@ -19,6 +19,68 @@ function endOfDay(d) {
   return x;
 }
 
+function getMonthKey(d) {
+  const x = new Date(d);
+  const y = x.getFullYear();
+  const m = String(x.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+}
+
+// Student grid: course/batch filter, month-wise present/absent, mock score (trainer or admin)
+router.get('/students-grid', protect, trainerOrAdmin, async (req, res) => {
+  try {
+    const { course: courseId, batch, year } = req.query;
+    const yearNum = year ? parseInt(year, 10) : new Date().getFullYear();
+    if (!courseId || !batch) {
+      return res.status(400).json({ message: 'Course and batch are required.' });
+    }
+    const sessionMatch = { course: courseId, batch, sessionDate: { $gte: new Date(`${yearNum}-01-01`), $lte: endOfDay(new Date(`${yearNum}-12-31`)) } };
+    if (req.user.role === 'trainer') sessionMatch.trainer = req.user._id;
+    const sessions = await AttendanceSession.find(sessionMatch).select('_id sessionDate').lean();
+    const sessionIds = sessions.map((s) => s._id);
+    const sessionDateMap = Object.fromEntries(sessions.map((s) => [s._id.toString(), s.sessionDate]));
+    const students = await Student.find({ course: courseId, batch }).select('name email phone mockInterviewScore').sort({ name: 1 }).lean();
+    const attendances = await Attendance.find({ session: { $in: sessionIds } }).select('session student status').lean();
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const byStudentMonth = {};
+    for (const a of attendances) {
+      const sid = a.student.toString();
+      const date = sessionDateMap[a.session.toString()];
+      if (!date) continue;
+      const key = getMonthKey(date);
+      if (!byStudentMonth[sid]) byStudentMonth[sid] = {};
+      if (!byStudentMonth[sid][key]) byStudentMonth[sid][key] = { present: 0, absent: 0 };
+      if (a.status === 'present') byStudentMonth[sid][key].present += 1;
+      else byStudentMonth[sid][key].absent += 1;
+    }
+    const months = [];
+    for (let m = 1; m <= 12; m++) {
+      months.push({ key: `${yearNum}-${String(m).padStart(2, '0')}`, label: monthNames[m - 1] });
+    }
+    const grid = students.map((s) => {
+      const sid = s._id.toString();
+      const byMonth = byStudentMonth[sid] || {};
+      const attendanceByMonth = months.map(({ key, label }) => ({
+        month: key,
+        label,
+        present: byMonth[key]?.present ?? 0,
+        absent: byMonth[key]?.absent ?? 0
+      }));
+      return {
+        _id: s._id,
+        name: s.name,
+        email: s.email,
+        phone: s.phone,
+        mockInterviewScore: s.mockInterviewScore ?? null,
+        attendanceByMonth
+      };
+    });
+    res.json({ year: yearNum, months, students: grid });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 router.get('/daily', protect, trainerOrAdmin, async (req, res) => {
   try {
     const date = req.query.date ? new Date(req.query.date) : new Date();

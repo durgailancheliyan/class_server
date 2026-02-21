@@ -6,6 +6,7 @@ const studentSchema = new mongoose.Schema({
   phone: { type: String, required: true },
   course: { type: mongoose.Schema.Types.ObjectId, ref: 'Course', required: true },
   batch: { type: String, required: true },
+  mockInterviewScore: { type: Number, default: null },
   createdAt: { type: Date, default: Date.now }
 });
 

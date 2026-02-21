@@ -1,6 +1,6 @@
 import express from 'express';
 import Student from '../models/Student.js';
-import { protect, adminOnly } from '../middleware/auth.js';
+import { protect, adminOnly, trainerOrAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -41,6 +41,28 @@ router.post('/', protect, adminOnly, async (req, res) => {
     res.status(201).json(await student.populate('course', 'name code'));
   } catch (error) {
     res.status(400).json({ message: error.message });
+  }
+});
+
+// Trainer or admin: update only mock interview score
+router.patch('/:id/mock-score', protect, trainerOrAdmin, async (req, res) => {
+  try {
+    const score = req.body.mockInterviewScore;
+    const update = {};
+    if (score !== undefined && score !== null && score !== '') {
+      const num = Number(score);
+      if (Number.isNaN(num) || num < 0 || num > 100) {
+        return res.status(400).json({ message: 'Mock interview score must be between 0 and 100.' });
+      }
+      update.mockInterviewScore = num;
+    } else {
+      update.mockInterviewScore = null;
+    }
+    const student = await Student.findByIdAndUpdate(req.params.id, update, { new: true }).populate('course', 'name code');
+    if (!student) return res.status(404).json({ message: 'Student not found' });
+    res.json(student);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
