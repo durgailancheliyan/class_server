@@ -57,7 +57,7 @@ router.post('/mark/:slug', async (req, res) => {
     const registeredNormalized = normalizePhone(student.phone);
     if (!inputNormalized || !registeredNormalized || inputNormalized !== registeredNormalized) {
       return res.status(403).json({
-        message: 'Phone number does not match the registered number for this student.'
+        message: 'Use only your own registered phone number. Another student\'s number is not allowed. Each student marks once—Present or Absent—one time only.'
       });
     }
     const existing = await Attendance.findOne({ session: session._id, student: studentId });
@@ -68,7 +68,7 @@ router.post('/mark/:slug', async (req, res) => {
     }
     const existingByPhone = await Attendance.findOne({ session: session._id, normalizedPhone: inputNormalized });
     if (existingByPhone) {
-      return res.status(400).json({ message: 'This phone number has already been used to mark attendance for this session. Each phone can be used only once.' });
+      return res.status(400).json({ message: 'This phone number has already been used for this session. Only one submission per student—one click Present or Absent, one time only. No second attempt with any phone.' });
     }
     const attendance = await Attendance.create({
       session: session._id,
