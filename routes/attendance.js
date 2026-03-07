@@ -15,8 +15,6 @@ function normalizePhone(value) {
   return digits.slice(-10);
 }
 
-// Rules: (1) Only the student's own registered phone can mark. (2) Phone must be in student list for this session.
-// (3) Another student's phone or another device/phone cannot mark—we resolve the student only from the phone provided.
 router.post('/mark/:slug', async (req, res) => {
   try {
     const clientIp = getClientIp(req);
@@ -32,14 +30,13 @@ router.post('/mark/:slug', async (req, res) => {
       });
     }
     const { slug } = req.params;
-    const { status, phone } = req.body;
-    // Never use studentId from client – attendance is determined only by the phone number (must be the student's own registered number)
-    if (!['present', 'absent'].includes(status)) {
-      return res.status(400).json({ message: 'Valid status (present/absent) required.' });
+    const { studentId, status, phone } = req.body;
+    if (!studentId || !['present', 'absent'].includes(status)) {
+      return res.status(400).json({ message: 'Valid studentId and status (present/absent) required.' });
     }
     const phoneTrimmed = phone != null ? String(phone).trim() : '';
     if (!phoneTrimmed) {
-      return res.status(400).json({ message: 'Attendance must be marked using the student\'s own registered phone number only. Another device or another phone cannot mark for you.' });
+      return res.status(400).json({ message: 'Phone number is required to mark attendance.' });
     }
     const session = await AttendanceSession.findOne({ slug, isActive: true }).populate('course', '_id');
     if (!session) {
@@ -48,31 +45,34 @@ router.post('/mark/:slug', async (req, res) => {
     if (!isSessionOpen(session.opensAt, session.closesAt)) {
       return res.status(400).json({ message: 'Attendance window has closed. Link expired.' });
     }
-    // Resolve student only by phone: must be in student list; prevents using another student's number or another device/phone
-    const inputNormalized = normalizePhone(phoneTrimmed);
-    if (!inputNormalized) {
-      return res.status(400).json({ message: 'Enter a valid registered phone number.' });
+    const student = await Student.findOne({
+      _id: studentId,
+      course: session.course._id,
+      batch: session.batch
+    }).select('phone');
+    if (!student) {
+      return res.status(400).json({ message: 'Student not found in this session.' });
     }
-    const studentsInBatch = await Student.find({ course: session.course._id, batch: session.batch }).select('_id phone').lean();
-    const match = studentsInBatch.filter(s => normalizePhone(s.phone) === inputNormalized);
-    if (match.length === 0) {
+    const inputNormalized = normalizePhone(phoneTrimmed);
+    const registeredNormalized = normalizePhone(student.phone);
+    if (!inputNormalized || !registeredNormalized || inputNormalized !== registeredNormalized) {
       return res.status(403).json({
-        message: 'This phone number is not in the student list. You cannot mark present or absent. Only your own registered phone number is allowed; using another student\'s number is not allowed.'
+        message: 'Phone number does not match the registered number for this student.'
       });
     }
-    if (match.length > 1) {
-      return res.status(400).json({ message: 'Multiple students share this number. Contact admin.' });
-    }
-    // Mark is only for the student who owns this phone – we never allow another student's number to mark
-    const studentId = match[0]._id;
     const existing = await Attendance.findOne({ session: session._id, student: studentId });
     if (existing) {
       return res.status(400).json({ message: 'You have already marked attendance for this session.' });
     }
+    const existingByPhone = await Attendance.findOne({ session: session._id, normalizedPhone: inputNormalized });
+    if (existingByPhone) {
+      return res.status(400).json({ message: 'This phone number has already been used to mark attendance for this session. Each phone can be used only once.' });
+    }
     const attendance = await Attendance.create({
       session: session._id,
       student: studentId,
-      status
+      status,
+      normalizedPhone: inputNormalized
     });
     res.status(201).json({
       message: 'Attendance marked successfully.',
