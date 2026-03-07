@@ -98,7 +98,7 @@ router.get('/:slug', async (req, res) => {
       const studentsInBatch = await Student.find({ course: session.course._id, batch: session.batch }).select('name phone').lean();
       const match = studentsInBatch.filter(s => normalizePhone(s.phone) === inputNorm);
       if (match.length === 0) {
-        return res.status(404).json({ message: 'This phone number is not in the student list. Only your own registered number can view details and mark attendance. You cannot use another student\'s number, another device, or another phone.' });
+        return res.status(404).json({ message: 'This phone number is not in the student list. You cannot mark present or absent. Use only your own registered number; another student\'s number is not allowed.' });
       }
       if (match.length > 1) {
         return res.status(400).json({ message: 'Multiple students share this number. Contact admin.' });

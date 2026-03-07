@@ -33,6 +33,7 @@ router.post('/mark/:slug', async (req, res) => {
     }
     const { slug } = req.params;
     const { status, phone } = req.body;
+    // Never use studentId from client – attendance is determined only by the phone number (must be the student's own registered number)
     if (!['present', 'absent'].includes(status)) {
       return res.status(400).json({ message: 'Valid status (present/absent) required.' });
     }
@@ -56,12 +57,13 @@ router.post('/mark/:slug', async (req, res) => {
     const match = studentsInBatch.filter(s => normalizePhone(s.phone) === inputNormalized);
     if (match.length === 0) {
       return res.status(403).json({
-        message: 'This phone number is not in the student list. Only a student\'s own registered phone can mark present or absent. You cannot use another student\'s number or another device or phone.'
+        message: 'This phone number is not in the student list. You cannot mark present or absent. Only your own registered phone number is allowed; using another student\'s number is not allowed.'
       });
     }
     if (match.length > 1) {
       return res.status(400).json({ message: 'Multiple students share this number. Contact admin.' });
     }
+    // Mark is only for the student who owns this phone – we never allow another student's number to mark
     const studentId = match[0]._id;
     const existing = await Attendance.findOne({ session: session._id, student: studentId });
     if (existing) {
