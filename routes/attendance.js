@@ -15,6 +15,8 @@ function normalizePhone(value) {
   return digits.slice(-10);
 }
 
+// Rules: (1) Only the student's own registered phone can mark. (2) Phone must be in student list for this session.
+// (3) Another student's phone or another device/phone cannot mark—we resolve the student only from the phone provided.
 router.post('/mark/:slug', async (req, res) => {
   try {
     const clientIp = getClientIp(req);
@@ -36,7 +38,7 @@ router.post('/mark/:slug', async (req, res) => {
     }
     const phoneTrimmed = phone != null ? String(phone).trim() : '';
     if (!phoneTrimmed) {
-      return res.status(400).json({ message: 'Attendance must be marked using the student\'s registered phone number only. Another device or number cannot mark for you.' });
+      return res.status(400).json({ message: 'Attendance must be marked using the student\'s own registered phone number only. Another device or another phone cannot mark for you.' });
     }
     const session = await AttendanceSession.findOne({ slug, isActive: true }).populate('course', '_id');
     if (!session) {
@@ -45,7 +47,7 @@ router.post('/mark/:slug', async (req, res) => {
     if (!isSessionOpen(session.opensAt, session.closesAt)) {
       return res.status(400).json({ message: 'Attendance window has closed. Link expired.' });
     }
-    // Resolve student only by phone – must be in student list for this session; prevents using another student's number
+    // Resolve student only by phone: must be in student list; prevents using another student's number or another device/phone
     const inputNormalized = normalizePhone(phoneTrimmed);
     if (!inputNormalized) {
       return res.status(400).json({ message: 'Enter a valid registered phone number.' });
@@ -54,7 +56,7 @@ router.post('/mark/:slug', async (req, res) => {
     const match = studentsInBatch.filter(s => normalizePhone(s.phone) === inputNormalized);
     if (match.length === 0) {
       return res.status(403).json({
-        message: 'This phone number is not registered for any student in this batch. Attendance can only be marked using the student\'s own registered number from their device.'
+        message: 'This phone number is not in the student list. Only a student\'s own registered phone can mark present or absent. You cannot use another student\'s number or another device or phone.'
       });
     }
     if (match.length > 1) {
