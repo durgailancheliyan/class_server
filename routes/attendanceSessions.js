@@ -98,7 +98,7 @@ router.get('/:slug', async (req, res) => {
       const studentsInBatch = await Student.find({ course: session.course._id, batch: session.batch }).select('name phone').lean();
       const match = studentsInBatch.filter(s => normalizePhone(s.phone) === inputNorm);
       if (match.length === 0) {
-        return res.status(404).json({ message: 'No student found with this phone number in this batch. Use your own registered number only.' });
+        return res.status(404).json({ message: 'No student found with this phone number in this batch. Only a registered student phone number can view details and mark attendance.' });
       }
       if (match.length > 1) {
         return res.status(400).json({ message: 'Multiple students share this number. Contact admin.' });

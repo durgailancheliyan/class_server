@@ -36,7 +36,7 @@ router.post('/mark/:slug', async (req, res) => {
     }
     const phoneTrimmed = phone != null ? String(phone).trim() : '';
     if (!phoneTrimmed) {
-      return res.status(400).json({ message: 'Phone number is required to mark attendance. Use your own registered number only.' });
+      return res.status(400).json({ message: 'Attendance must be marked using the student\'s registered phone number only. Another device or number cannot mark for you.' });
     }
     const session = await AttendanceSession.findOne({ slug, isActive: true }).populate('course', '_id');
     if (!session) {
@@ -54,7 +54,7 @@ router.post('/mark/:slug', async (req, res) => {
     const match = studentsInBatch.filter(s => normalizePhone(s.phone) === inputNormalized);
     if (match.length === 0) {
       return res.status(403).json({
-        message: 'No student found with this phone number in this batch. Only your own registered number can mark attendance.'
+        message: 'This phone number is not registered for any student in this batch. Attendance can only be marked using the student\'s own registered number from their device.'
       });
     }
     if (match.length > 1) {
