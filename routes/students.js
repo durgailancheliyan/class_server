@@ -92,4 +92,17 @@ router.delete('/:id', protect, adminOnly, async (req, res) => {
   }
 });
 
+router.post('/bulk-delete', protect, adminOnly, async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+    if (ids.length === 0) {
+      return res.status(400).json({ message: 'Provide an array of student ids (ids).' });
+    }
+    const result = await Student.deleteMany({ _id: { $in: ids } });
+    res.json({ message: `Deleted ${result.deletedCount} student(s).`, deletedCount: result.deletedCount });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 export default router;

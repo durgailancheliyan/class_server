@@ -1,6 +1,6 @@
 const CLASS_START_HOUR = 9;
 const CLASS_END_HOUR = 18;
-const SESSION_DURATION_MS = 2 * 60 * 1000;
+const SESSION_DURATION_MS = 5 * 60 * 1000;
 
 // India (Velachery/Chennai): UTC+5:30 = 330 minutes. Set ATTENDANCE_UTC_OFFSET_MINUTES if different.
 const UTC_OFFSET_MINUTES = Number(process.env.ATTENDANCE_UTC_OFFSET_MINUTES) || 330;

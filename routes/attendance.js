@@ -30,13 +30,13 @@ router.post('/mark/:slug', async (req, res) => {
       });
     }
     const { slug } = req.params;
-    const { studentId, status, phone } = req.body;
-    if (!studentId || !['present', 'absent'].includes(status)) {
-      return res.status(400).json({ message: 'Valid studentId and status (present/absent) required.' });
+    const { status, phone } = req.body;
+    if (!['present', 'absent'].includes(status)) {
+      return res.status(400).json({ message: 'Valid status (present/absent) required.' });
     }
     const phoneTrimmed = phone != null ? String(phone).trim() : '';
     if (!phoneTrimmed) {
-      return res.status(400).json({ message: 'Phone number is required to mark attendance.' });
+      return res.status(400).json({ message: 'Phone number is required to mark attendance. Use your own registered number only.' });
     }
     const session = await AttendanceSession.findOne({ slug, isActive: true }).populate('course', '_id');
     if (!session) {
@@ -45,21 +45,22 @@ router.post('/mark/:slug', async (req, res) => {
     if (!isSessionOpen(session.opensAt, session.closesAt)) {
       return res.status(400).json({ message: 'Attendance window has closed. Link expired.' });
     }
-    const student = await Student.findOne({
-      _id: studentId,
-      course: session.course._id,
-      batch: session.batch
-    }).select('phone');
-    if (!student) {
-      return res.status(400).json({ message: 'Student not found in this session.' });
-    }
+    // Resolve student only by phone – must be in student list for this session; prevents using another student's number
     const inputNormalized = normalizePhone(phoneTrimmed);
-    const registeredNormalized = normalizePhone(student.phone);
-    if (!inputNormalized || !registeredNormalized || inputNormalized !== registeredNormalized) {
+    if (!inputNormalized) {
+      return res.status(400).json({ message: 'Enter a valid registered phone number.' });
+    }
+    const studentsInBatch = await Student.find({ course: session.course._id, batch: session.batch }).select('_id phone').lean();
+    const match = studentsInBatch.filter(s => normalizePhone(s.phone) === inputNormalized);
+    if (match.length === 0) {
       return res.status(403).json({
-        message: 'Phone number does not match the registered number for this student.'
+        message: 'No student found with this phone number in this batch. Only your own registered number can mark attendance.'
       });
     }
+    if (match.length > 1) {
+      return res.status(400).json({ message: 'Multiple students share this number. Contact admin.' });
+    }
+    const studentId = match[0]._id;
     const existing = await Attendance.findOne({ session: session._id, student: studentId });
     if (existing) {
       return res.status(400).json({ message: 'You have already marked attendance for this session.' });

@@ -36,7 +36,7 @@ router.post('/', protect, trainerOnly, async (req, res) => {
     res.status(201).json({
       ...session.toObject(),
       link,
-      message: 'Attendance link active for 2 minutes.'
+      message: 'Attendance link active for 5 minutes.'
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -56,6 +56,11 @@ router.get('/', protect, trainerOrAdmin, async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
+function normalizePhone(value) {
+  if (value == null || typeof value !== 'string') return '';
+  return value.replace(/\D/g, '').slice(-10);
+}
 
 router.get('/:slug', async (req, res) => {
   try {
@@ -83,6 +88,38 @@ router.get('/:slug', async (req, res) => {
     if (now > new Date(session.closesAt)) {
       return res.status(400).json({ message: 'Session has closed. Link expired.' });
     }
+
+    const phoneQuery = req.query.phone != null ? String(req.query.phone).trim() : '';
+    if (phoneQuery) {
+      const inputNorm = normalizePhone(phoneQuery);
+      if (!inputNorm) {
+        return res.status(400).json({ message: 'Enter your registered phone number.' });
+      }
+      const studentsInBatch = await Student.find({ course: session.course._id, batch: session.batch }).select('name phone').lean();
+      const match = studentsInBatch.filter(s => normalizePhone(s.phone) === inputNorm);
+      if (match.length === 0) {
+        return res.status(404).json({ message: 'No student found with this phone number in this batch. Use your own registered number only.' });
+      }
+      if (match.length > 1) {
+        return res.status(400).json({ message: 'Multiple students share this number. Contact admin.' });
+      }
+      const markedOne = await Attendance.findOne({ session: session._id, student: match[0]._id }).select('status').lean();
+      return res.json({
+        session: {
+          _id: session._id,
+          slug: session.slug,
+          course: session.course,
+          batch: session.batch,
+          closesAt: session.closesAt
+        },
+        student: {
+          _id: match[0]._id,
+          name: match[0].name,
+          status: markedOne?.status ?? null
+        }
+      });
+    }
+
     const students = await Student.find({ course: session.course._id, batch: session.batch })
       .select('name email phone');
     const marked = await Attendance.find({ session: session._id }).select('student status');
