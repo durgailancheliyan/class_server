@@ -63,7 +63,7 @@ router.post('/mark/:slug', async (req, res) => {
     const existing = await Attendance.findOne({ session: session._id, student: studentId });
     if (existing) {
       return res.status(400).json({
-        message: 'You have already marked attendance for this session. A second submission is not allowed—whether from another phone number, device, or proxy.'
+        message: 'You have already marked attendance for this session. You cannot mark again from another phone number on your device.'
       });
     }
     const existingByPhone = await Attendance.findOne({ session: session._id, normalizedPhone: inputNormalized });

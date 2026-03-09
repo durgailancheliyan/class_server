@@ -1,5 +1,7 @@
 import express from 'express';
 import Student from '../models/Student.js';
+import AttendanceSession from '../models/AttendanceSession.js';
+import Attendance from '../models/Attendance.js';
 import { protect, adminOnly, trainerOrAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -10,7 +12,34 @@ router.get('/', protect, async (req, res) => {
     const filter = {};
     if (course) filter.course = course;
     if (batch) filter.batch = batch;
-    const students = await Student.find(filter).populate('course', 'name code').sort({ name: 1 });
+    const students = await Student.find(filter).populate('course', 'name code').sort({ name: 1 }).lean();
+    if (students.length === 0) {
+      return res.json(students);
+    }
+    if (course && batch) {
+      const sessions = await AttendanceSession.find({ course, batch })
+        .select('_id sessionDate')
+        .sort({ sessionDate: -1 })
+        .limit(60)
+        .lean();
+      const sessionIds = sessions.map((s) => s._id);
+      const sessionDateMap = Object.fromEntries(sessions.map((s) => [s._id.toString(), s.sessionDate]));
+      const attendances = await Attendance.find({ session: { $in: sessionIds } })
+        .select('session student status')
+        .lean();
+      const byStudent = {};
+      for (const a of attendances) {
+        const sid = a.student.toString();
+        const date = sessionDateMap[a.session.toString()];
+        if (!date) continue;
+        const dateStr = new Date(date).toISOString().slice(0, 10);
+        if (!byStudent[sid]) byStudent[sid] = [];
+        byStudent[sid].push({ date: dateStr, status: a.status });
+      }
+      students.forEach((s) => {
+        s.attendanceByDate = (byStudent[s._id.toString()] || []).sort((a, b) => b.date.localeCompare(a.date));
+      });
+    }
     res.json(students);
   } catch (error) {
     res.status(500).json({ message: error.message });
