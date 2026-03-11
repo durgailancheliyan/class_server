@@ -3,6 +3,7 @@ import Attendance from '../models/Attendance.js';
 import AttendanceSession from '../models/AttendanceSession.js';
 import Student from '../models/Student.js';
 import Course from '../models/Course.js';
+import { ensureDefaultAbsentForClosedSessions } from '../utils/attendance.js';
 import { protect, trainerOrAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -91,6 +92,9 @@ router.get('/daily', protect, trainerOrAdmin, async (req, res) => {
     const sessions = await AttendanceSession.find(filter)
       .populate('course', 'name code')
       .populate('trainer', 'name');
+    const now = new Date();
+    const closedSessions = sessions.filter((s) => new Date(s.closesAt) < now).map((s) => ({ _id: s._id, course: s.course?._id ?? s.course, batch: s.batch }));
+    await ensureDefaultAbsentForClosedSessions(closedSessions);
     const sessionIds = sessions.map(s => s._id);
     const attendances = await Attendance.find({ session: { $in: sessionIds } })
       .populate('student', 'name email phone')

@@ -2,6 +2,7 @@ import express from 'express';
 import Student from '../models/Student.js';
 import AttendanceSession from '../models/AttendanceSession.js';
 import Attendance from '../models/Attendance.js';
+import { ensureDefaultAbsentForClosedSessions } from '../utils/attendance.js';
 import { protect, adminOnly, trainerOrAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -18,11 +19,14 @@ router.get('/', protect, async (req, res) => {
     }
     if (course && batch) {
       const sessions = await AttendanceSession.find({ course, batch })
-        .select('_id sessionDate')
+        .select('_id sessionDate closesAt')
         .sort({ sessionDate: -1 })
         .limit(60)
         .lean();
       const sessionIds = sessions.map((s) => s._id);
+      const now = new Date();
+      const closedSessions = sessions.filter((s) => new Date(s.closesAt) < now);
+      await ensureDefaultAbsentForClosedSessions(closedSessions, students);
       const sessionDateMap = Object.fromEntries(sessions.map((s) => [s._id.toString(), s.sessionDate]));
       const attendances = await Attendance.find({ session: { $in: sessionIds } })
         .select('session student status')
@@ -39,6 +43,13 @@ router.get('/', protect, async (req, res) => {
       students.forEach((s) => {
         s.attendanceByDate = (byStudent[s._id.toString()] || []).sort((a, b) => b.date.localeCompare(a.date));
       });
+      const sessionDates = sessions.map((s) => {
+        const d = new Date(s.sessionDate);
+        const dateStr = d.toISOString().slice(0, 10);
+        const label = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
+        return { dateStr, label };
+      });
+      return res.json({ students, sessionDates });
     }
     res.json(students);
   } catch (error) {
