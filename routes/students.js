@@ -111,7 +111,7 @@ router.put('/:id', protect, adminOnly, async (req, res) => {
   }
 });
 
-router.delete('/:id', protect, adminOnly, async (req, res) => {
+router.delete('/:id', protect, trainerOrAdmin, async (req, res) => {
   try {
     const student = await Student.findByIdAndDelete(req.params.id);
     if (!student) return res.status(404).json({ message: 'Student not found' });
@@ -121,7 +121,7 @@ router.delete('/:id', protect, adminOnly, async (req, res) => {
   }
 });
 
-router.post('/bulk-delete', protect, adminOnly, async (req, res) => {
+router.post('/bulk-delete', protect, trainerOrAdmin, async (req, res) => {
   try {
     const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
     if (ids.length === 0) {

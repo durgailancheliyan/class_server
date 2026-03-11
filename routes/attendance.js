@@ -68,7 +68,7 @@ router.post('/mark/:slug', async (req, res) => {
     }
     const existingByPhone = await Attendance.findOne({ session: session._id, normalizedPhone: inputNormalized });
     if (existingByPhone) {
-      return res.status(400).json({ message: 'This phone number has already been used for this session. Only one submission per student—one click Present or Absent, one time only. No second attempt with any phone.' });
+      return res.status(400).json({ message: 'This phone number has already been used for this session. Do not use another number for a second attempt—one click Present or Absent, one time only.' });
     }
     const attendance = await Attendance.create({
       session: session._id,
